@@ -65,7 +65,22 @@ final class MonitorStore {
         return ports[((index ?? -1) + 1) % ports.count]
     }
 
+    /// The input also changes on the monitor's own buttons or from the other machine's KVM, so the
+    /// cycle hotkey reads the real value before stepping. A switch already in flight keeps the
+    /// optimistic value, or a quick second press would re-send the port it just selected.
     func selectNext() {
+        guard ddcAvailable, !isRefreshing else { return advanceToNextPort() }
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            let actual = DDC.currentInput()
+            DispatchQueue.main.async {
+                guard let self else { return }
+                if let actual { self.currentInput = actual }
+                self.advanceToNextPort()
+            }
+        }
+    }
+
+    private func advanceToNextPort() {
         if let next = nextPort { select(next) }
     }
 
